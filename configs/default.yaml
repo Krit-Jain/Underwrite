@@ -1,0 +1,38 @@
+# Underwrite default configuration.
+# Pin `model.revision` to a commit hash once the first full run succeeds, so the
+# calibration stays valid against a frozen set of weights.
+
+seed: 20261017
+
+model:
+  # Gemma 4 E4B (edge, natively multimodal) is the preferred target for a 6 GB laptop.
+  # Confirm its exact Hugging Face repo id on the Gemma release page, then replace the
+  # known-good fallback below.
+  id: google/gemma-3-4b-it
+  revision: null
+  quantization: nf4
+  compute_dtype: bfloat16
+  max_new_tokens: 512
+  do_sample: false
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  cache_dir: data/cache
+  splits_file: data/splits.json
+
+# Document-level split. Never split fields from one document across sets.
+splits:
+  probe_train: 0.4
+  calibration: 0.3
+  test: 0.3
+
+signals:
+  fields: [vendor, date, subtotal, tax, total]
+  hidden_layer_fractions: [0.25, 0.5, 0.75, 0.9]
+
+conformal:
+  # The threshold grid is fixed in advance, never derived from calibration scores.
+  alpha_grid: [0.10, 0.05, 0.02]
+  delta: 0.1
+  threshold_grid_size: 501
