@@ -170,6 +170,39 @@ def format_rate(rate: Decimal) -> str:
     return f"{rate.normalize():f}%"
 
 
+def page_tokens(spec: InvoiceSpec) -> list[str]:
+    """The words a perfect OCR pass would return for this invoice.
+
+    Synthetic invoices have no OCR annotations, so grounding is measured against the
+    text the renderer drew. This is oracle text: it removes OCR error from the
+    picture, which is documented as a limitation of the synthetic shift set.
+    """
+    style = spec.money_style
+    tokens: list[str] = []
+    tokens += spec.vendor_name.split()
+    tokens += spec.vendor_address.split()
+    tokens.append(spec.vendor_gstin)
+    tokens += spec.buyer_name.split()
+    if spec.buyer_gstin:
+        tokens.append(spec.buyer_gstin)
+    tokens.append(spec.invoice_no)
+    tokens += format_date(spec.date, spec.date_format).split()
+    for item in spec.items:
+        tokens += item.description.split()
+        tokens.append(item.hsn)
+        tokens.append(str(item.quantity))
+        tokens.append(format_money(item.unit_price, style))
+        tokens.append(format_money(item.amount, style))
+    tokens.append(format_money(spec.subtotal, style))
+    if spec.inter_state:
+        tokens.append(format_money(spec.igst, style))
+    else:
+        tokens.append(format_money(spec.cgst, style))
+        tokens.append(format_money(spec.sgst, style))
+    tokens.append(format_money(spec.total, style))
+    return tokens
+
+
 def build_spec(rng: random.Random, doc_id: str) -> InvoiceSpec:
     """Build one internally consistent invoice specification."""
     vendor_name, vendor_address, _pin, state_code = rng.choice(VENDORS)
