@@ -12,6 +12,10 @@ Fitting rules, from the statistical design in the plan:
   probe scores, so the probe score it sees during fitting is not one it produced
   for its own training rows;
 * the test split is scored once, at the end.
+
+Scoring is split into :func:`fit_scorers` and :func:`apply_scorers` so that the same
+fitted objects can score a *different* corpus, which is what the shift experiment
+needs: fit on CORD, deploy on synthetic invoices.
 """
 
 from __future__ import annotations
@@ -37,9 +41,24 @@ from underwrite.signals.validators import CHECK_NAMES
 TRAIN_SPLIT = "probe_train"
 TEST_SPLIT = "test"
 
-# Token-level features; entropy is negated so that "higher is more correct" holds.
-TOKEN_COLUMNS = ("mean_logprob", "min_logprob", "first_token_entropy", "first_token_margin", "n_tokens")
+TOKEN_COLUMNS = (
+    "mean_logprob",
+    "min_logprob",
+    "first_token_entropy",
+    "first_token_margin",
+    "n_tokens",
+)
 BLACK_BOX_COLUMNS = TOKEN_COLUMNS + tuple(CHECK_NAMES) + ("grounding", "verbalized")
+
+METHOD_COLUMNS = (
+    "S0 logprob",
+    "S1 verbalized",
+    "S2 validators",
+    "S2g grounding",
+    "S3 black-box fusion",
+    "S4 probe",
+    "S5 probe + fusion",
+)
 
 PCA_COMPONENTS = (32, 64)
 REGULARISATION = (0.01, 0.1, 1.0)
@@ -56,11 +75,25 @@ class ProbeChoice:
     cv_auroc: float
 
 
+@dataclass
+class Scorers:
+    """All fitted objects, reusable on an unseen corpus."""
+
+    field: str
+    choice: ProbeChoice
+    logprob_fill: float
+    verbalized_fill: float
+    validators: Any
+    black_box: Any
+    probe: Any
+    fusion: Any
+
+
 def _matrix(frame: pd.DataFrame, columns: Sequence[str]) -> np.ndarray:
     values = frame[list(columns)].to_numpy(dtype=float).copy()
     if "first_token_entropy" in columns:
-        index = list(columns).index("first_token_entropy")
-        values[:, index] = -values[:, index]
+        # Entropy points the other way: more entropy means less confidence.
+        values[:, list(columns).index("first_token_entropy")] *= -1.0
     return values
 
 
@@ -86,23 +119,20 @@ def _hidden_matrix(
     frame: pd.DataFrame,
     field: str,
     layer: int,
-    hidden_size: int | None = None,
+    hidden_size: int = 1536,
 ) -> np.ndarray:
     """Stack the last-token hidden vector for each row, zero-filling any gaps."""
     root = Path(features_dir)
     rows: list[np.ndarray] = []
     for doc_id in frame["doc_id"]:
-        path = root / f"{doc_id}.npz"
         vector: np.ndarray | None = None
+        path = root / f"{doc_id}.npz"
         if path.is_file():
             arrays, _ = load_features(path)
             key = f"hidden__{field}__L{layer}"
             if key in arrays:
                 vector = arrays[key][0].astype(np.float32)
-        if vector is None:
-            width = hidden_size or 1536
-            vector = np.zeros(width, dtype=np.float32)
-        rows.append(vector)
+        rows.append(vector if vector is not None else np.zeros(hidden_size, dtype=np.float32))
     return np.vstack(rows)
 
 
@@ -115,7 +145,7 @@ def select_probe(
     seed: int = 0,
 ) -> ProbeChoice:
     """Choose layer, PCA width and regularisation by cross-validation on train."""
-    splits = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=seed)
+    folds = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=seed)
     best: ProbeChoice | None = None
 
     for layer in layers:
@@ -125,17 +155,103 @@ def select_probe(
                 pipeline = _logistic_pipeline(n_components=n_components, C=C)
                 try:
                     probabilities = cross_val_predict(
-                        pipeline, X, labels, cv=splits, method="predict_proba"
+                        pipeline, X, labels, cv=folds, method="predict_proba"
                     )[:, 1]
                 except ValueError:
                     continue
                 score = float(roc_auc_score(labels, probabilities))
                 if best is None or score > best.cv_auroc:
-                    best = ProbeChoice(layer=layer, n_components=n_components, C=C, cv_auroc=score)
+                    best = ProbeChoice(layer, n_components, C, score)
 
     if best is None:
         raise RuntimeError(f"no usable probe configuration for field {field!r}")
     return best
+
+
+def fit_scorers(
+    train: pd.DataFrame,
+    field: str,
+    features_dir: str | Path,
+    layers: Sequence[int],
+    seed: int = 0,
+) -> Scorers:
+    """Fit every method on the given training rows."""
+    labels = train["correct"].to_numpy(dtype=int)
+    choice = select_probe(features_dir, train, field, labels, layers, seed=seed)
+
+    probe_train = _hidden_matrix(features_dir, train, field, choice.layer)
+    probe_pipeline = _logistic_pipeline(n_components=choice.n_components, C=choice.C)
+    probe_pipeline.fit(probe_train, labels)
+
+    folds = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=seed)
+    out_of_fold = cross_val_predict(
+        _logistic_pipeline(n_components=choice.n_components, C=choice.C),
+        probe_train,
+        labels,
+        cv=folds,
+        method="predict_proba",
+    )[:, 1]
+
+    black_box = _logistic_pipeline().fit(_matrix(train, BLACK_BOX_COLUMNS), labels)
+    fusion = _logistic_pipeline().fit(
+        np.column_stack([_matrix(train, BLACK_BOX_COLUMNS), out_of_fold]), labels
+    )
+    validators = _logistic_pipeline().fit(_matrix(train, CHECK_NAMES), labels)
+
+    return Scorers(
+        field=field,
+        choice=choice,
+        logprob_fill=float(train["mean_logprob"].median()),
+        verbalized_fill=float(train["verbalized"].median()),
+        validators=validators,
+        black_box=black_box,
+        probe=probe_pipeline,
+        fusion=fusion,
+    )
+
+
+def apply_scorers(
+    scorers: Scorers, frame: pd.DataFrame, features_dir: str | Path
+) -> pd.DataFrame:
+    """Score an arbitrary frame with already-fitted scorers."""
+    scores: dict[str, np.ndarray] = {}
+    scores["S0 logprob"] = frame["mean_logprob"].fillna(scorers.logprob_fill).to_numpy(float)
+    scores["S1 verbalized"] = frame["verbalized"].fillna(scorers.verbalized_fill).to_numpy(float)
+    scores["S2 validators"] = _probabilities(scorers.validators, _matrix(frame, CHECK_NAMES))
+    scores["S2g grounding"] = frame["grounding"].fillna(0.0).to_numpy(float)
+    scores["S3 black-box fusion"] = _probabilities(
+        scorers.black_box, _matrix(frame, BLACK_BOX_COLUMNS)
+    )
+
+    probe = _hidden_matrix(features_dir, frame, scorers.field, scorers.choice.layer)
+    scores["S4 probe"] = _probabilities(scorers.probe, probe)
+    scores["S5 probe + fusion"] = _probabilities(
+        scorers.fusion,
+        np.column_stack([_matrix(frame, BLACK_BOX_COLUMNS), scores["S4 probe"]]),
+    )
+
+    scored = pd.DataFrame(
+        {"doc_id": frame["doc_id"], "split": frame["split"], "correct": frame["correct"]}
+    )
+    for method in METHOD_COLUMNS:
+        scored[method] = scores[method]
+    return scored
+
+
+def score_all(
+    frame: pd.DataFrame,
+    field: str,
+    features_dir: str | Path,
+    layers: Sequence[int],
+    seed: int = 0,
+) -> tuple[pd.DataFrame, ProbeChoice]:
+    """Fit on probe_train and score every row of ``field`` in the same corpus."""
+    subset = frame[frame["field"] == field].reset_index(drop=True)
+    train = subset[subset["split"] == TRAIN_SPLIT].reset_index(drop=True)
+    if train.empty:
+        raise ValueError(f"field {field!r} has no probe_train rows")
+    scorers = fit_scorers(train, field, features_dir, layers, seed=seed)
+    return apply_scorers(scorers, subset, features_dir), scorers.choice
 
 
 def run_field(
@@ -145,78 +261,24 @@ def run_field(
     layers: Sequence[int],
     seed: int = 0,
 ) -> pd.DataFrame:
-    """Score every method for one field and return its metrics table."""
-    subset = frame[frame["field"] == field].reset_index(drop=True)
-    train = subset[subset["split"] == TRAIN_SPLIT].reset_index(drop=True)
-    test = subset[subset["split"] == TEST_SPLIT].reset_index(drop=True)
-    if train.empty or test.empty:
-        raise ValueError(f"field {field!r} has no train or test rows")
+    """Score every method for one field and return its metrics on the test split."""
+    scored, choice = score_all(frame, field, features_dir, layers, seed=seed)
+    test = scored[scored["split"] == TEST_SPLIT]
+    if test.empty:
+        raise ValueError(f"field {field!r} has no test rows")
 
-    y_train = train["correct"].to_numpy(dtype=int)
-    y_test = test["correct"].to_numpy(dtype=int)
-    errors = 1 - y_test
-
-    results: dict[str, np.ndarray] = {}
-
-    # S0: mean token log-probability.
-    results["S0 logprob"] = test["mean_logprob"].fillna(
-        train["mean_logprob"].median()
-    ).to_numpy(dtype=float)
-
-    # S1: verbalized self-rating.
-    results["S1 verbalized"] = test["verbalized"].fillna(
-        train["verbalized"].median()
-    ).to_numpy(dtype=float)
-
-    # S2: validators only.
-    X_val_train = _matrix(train, CHECK_NAMES)
-    X_val_test = _matrix(test, CHECK_NAMES)
-    validator_model = _logistic_pipeline().fit(X_val_train, y_train)
-    results["S2 validators"] = _probabilities(validator_model, X_val_test)
-
-    # S2g: source grounding alone.
-    results["S2g grounding"] = test["grounding"].fillna(0.0).to_numpy(dtype=float)
-
-    # S3: the strongest black-box fusion (no hidden states).
-    X_bb_train = _matrix(train, BLACK_BOX_COLUMNS)
-    X_bb_test = _matrix(test, BLACK_BOX_COLUMNS)
-    black_box_model = _logistic_pipeline().fit(X_bb_train, y_train)
-    results["S3 black-box fusion"] = _probabilities(black_box_model, X_bb_test)
-
-    # S4: hidden-state probe only.
-    choice = select_probe(features_dir, train, field, y_train, layers, seed=seed)
-    probe_train = _hidden_matrix(features_dir, train, field, choice.layer)
-    probe_test = _hidden_matrix(features_dir, test, field, choice.layer)
-    probe_pipeline = _logistic_pipeline(n_components=choice.n_components, C=choice.C)
-    probe_pipeline.fit(probe_train, y_train)
-    results["S4 probe"] = _probabilities(probe_pipeline, probe_test)
-
-    # S5: fusion of the black-box features with an out-of-fold probe score.
-    splits = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=seed)
-    oof_probe = cross_val_predict(
-        _logistic_pipeline(n_components=choice.n_components, C=choice.C),
-        probe_train,
-        y_train,
-        cv=splits,
-        method="predict_proba",
-    )[:, 1]
-    fusion_train = np.column_stack([X_bb_train, oof_probe])
-    fusion_test = np.column_stack([X_bb_test, results["S4 probe"]])
-    fusion_model = _logistic_pipeline().fit(fusion_train, y_train)
-    results["S5 probe + fusion"] = _probabilities(fusion_model, fusion_test)
-
-    rows = []
-    for method, scores in results.items():
-        metrics = summarise(scores, errors)
-        rows.append(
+    errors = 1 - test["correct"].to_numpy(dtype=int)
+    table = pd.DataFrame(
+        [
             {
                 "field": field,
                 "method": method,
                 "n_test": len(test),
-                "base_error": float(np.mean(errors)),
-                **metrics,
+                "base_error": float(errors.mean()),
+                **summarise(test[method].to_numpy(dtype=float), errors),
             }
-        )
-    table = pd.DataFrame(rows)
+            for method in METHOD_COLUMNS
+        ]
+    )
     table.attrs["probe_choice"] = choice
     return table
