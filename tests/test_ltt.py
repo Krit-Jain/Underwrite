@@ -111,7 +111,12 @@ def _draw(rng, size):
 
 
 def test_realised_risk_exceeds_alpha_at_most_delta_of_the_time():
-    """The guarantee, simulated: violations should be no more than ~delta."""
+    """The guarantee, simulated.
+
+    The certified claim is about the *population* selective risk, so the test draw is
+    deliberately large: with a small test set, the realised risk fluctuates around
+    alpha and exceeds it far more often than delta even when the procedure is sound.
+    """
     rng = np.random.default_rng(0)
     alpha, delta, trials = 0.05, 0.1, 200
     grid = np.linspace(0.0, 1.0, 101)
@@ -121,7 +126,7 @@ def test_realised_risk_exceeds_alpha_at_most_delta_of_the_time():
     coverages = []
     for _ in range(trials):
         cal_scores, cal_errors = _draw(rng, 400)
-        test_scores, test_errors = _draw(rng, 400)
+        test_scores, test_errors = _draw(rng, 20_000)
 
         result = certify(cal_scores, cal_errors, alpha, delta, grid)
         if not result.certified:
@@ -132,5 +137,5 @@ def test_realised_risk_exceeds_alpha_at_most_delta_of_the_time():
             violations += 1
 
     assert certified > trials * 0.5, "the gate should usually certify on this data"
-    assert violations / trials <= delta + 0.05
+    assert violations / trials <= delta + 0.03
     assert np.mean(coverages) > 0.05
