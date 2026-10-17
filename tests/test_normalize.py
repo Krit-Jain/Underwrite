@@ -24,6 +24,9 @@ from underwrite.data.normalize import (
         ("1.234,56", Decimal("1234.56")),
         ("-7,800", Decimal("-7800")),
         (" 354.00 ", Decimal("354.00")),
+        ("Rs. 1,23,456.78", Decimal("123456.78")),
+        (".1,234.50", Decimal("1234.50")),
+        ("1,234.", Decimal("1234")),
         (1000, Decimal("1000")),
     ],
 )

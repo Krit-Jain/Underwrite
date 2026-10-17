@@ -73,6 +73,9 @@ def parse_money(value: Any, decimal_sep: str | None = None) -> Decimal | None:
 
     negative = cleaned.startswith("-")
     cleaned = cleaned.lstrip("-")
+    cleaned = cleaned.strip(".,")
+    if not cleaned:
+        return None
 
     if decimal_sep is None:
         decimal_sep = _infer_decimal_sep(cleaned)
