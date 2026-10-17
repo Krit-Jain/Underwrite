@@ -1,0 +1,38 @@
+# --- Agent-private and planning material (never commit or push) ---
+.commandcode/
+AGENTS.md
+UNDERWRITE_PLAN.md
+
+# --- Data: raw or provided documents may contain customer data, keep them local ---
+/data/
+*.pdf
+
+# --- Secrets ---
+.env
+*.token
+hf_token*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Model / Hugging Face caches ---
+/.cache/
+/models/
+
+# --- Editors and OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
