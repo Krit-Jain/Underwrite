@@ -3,18 +3,17 @@ from decimal import Decimal
 
 import pytest
 
-from underwrite.data.normalize import parse_money
+from underwrite.data.normalize import normalize_date, parse_money
 from underwrite.data.synth_invoices import (
     MONEY_STYLES,
     _TEMPLATE_COUNT,
-    build_spec,
+    format_date,
     format_money,
+    format_rate,
     generate_specs,
     render_html,
 )
 from underwrite.signals.gstin import is_valid_gstin
-
-import random
 
 
 def specs(count: int = 60, seed: int = 0):
@@ -58,7 +57,9 @@ def test_rendered_money_round_trips_through_the_parser(style):
 
 def test_date_is_rendered_in_the_configured_format():
     for spec in specs(20):
-        assert spec.date.strftime(spec.date_format)
+        rendered = format_date(spec.date, spec.date_format)
+        assert rendered in render_html(spec)
+        assert normalize_date(rendered) == spec.date
 
 
 def test_gold_matches_the_specification():
@@ -102,6 +103,47 @@ def test_html_shows_the_correct_tax_lines():
             assert "CGST" in html and "SGST" in html
 
 
+def test_intra_state_lines_are_labelled_with_half_the_rate_each():
+    checked = 0
+    for spec in specs(80):
+        if spec.inter_state:
+            continue
+        checked += 1
+        html = render_html(spec)
+        assert f"CGST @ {format_rate(spec.tax_rate / 2)}" in html
+        assert f"SGST @ {format_rate(spec.tax_rate / 2)}" in html
+        # The full rate must never label a single line.
+        assert f"CGST @ {format_rate(spec.tax_rate)}" not in html
+    assert checked > 0
+
+
+def test_inter_state_charges_the_full_rate_on_a_single_line():
+    checked = 0
+    for spec in specs(80):
+        if not spec.inter_state:
+            continue
+        checked += 1
+        html = render_html(spec)
+        assert f"IGST @ {format_rate(spec.tax_rate)}" in html
+        assert "CGST" not in html
+    assert checked > 0
+
+
+@pytest.mark.parametrize(
+    "rate,expected",
+    [
+        (Decimal("5"), "5%"),
+        (Decimal("12"), "12%"),
+        (Decimal("18"), "18%"),
+        (Decimal("28"), "28%"),
+        (Decimal("2.5"), "2.5%"),
+        (Decimal("9"), "9%"),
+    ],
+)
+def test_rate_formatting(rate, expected):
+    assert format_rate(rate) == expected
+
+
 @pytest.mark.parametrize(
     "amount,style,expected",
     [
@@ -115,3 +157,28 @@ def test_html_shows_the_correct_tax_lines():
 )
 def test_indian_money_formatting(amount, style, expected):
     assert format_money(amount, style) == expected
+
+
+def test_gold_values_are_visible_on_the_rendered_page():
+    """Guard against CSS hiding text that is present in the HTML source.
+
+    Skipped when Playwright or a Chromium build is unavailable, so the suite
+    still runs without the `synth` extras.
+    """
+    pytest.importorskip("playwright.sync_api")
+    from underwrite.data.synth_invoices import render_text
+
+    sample = specs(3)
+    try:
+        texts = [render_text(render_html(spec)) for spec in sample]
+    except Exception as exc:  # pragma: no cover - environment dependent
+        pytest.skip(f"chromium unavailable: {exc}")
+
+    for spec, text in zip(sample, texts):
+        visible = " ".join(text.split())
+        assert spec.vendor_name in visible
+        assert spec.vendor_gstin in visible
+        assert spec.invoice_no in visible
+        assert format_money(spec.total, spec.money_style) in visible
+        assert format_money(spec.subtotal, spec.money_style) in visible
+        assert spec.date.strftime(spec.date_format) in visible

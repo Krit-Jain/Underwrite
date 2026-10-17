@@ -165,6 +165,11 @@ def format_date(value: date, date_format: str) -> str:
     return value.strftime(date_format)
 
 
+def format_rate(rate: Decimal) -> str:
+    """Render a GST rate as it appears on an invoice, e.g. ``18`` or ``2.5``."""
+    return f"{rate.normalize():f}%"
+
+
 def build_spec(rng: random.Random, doc_id: str) -> InvoiceSpec:
     """Build one internally consistent invoice specification."""
     vendor_name, vendor_address, _pin, state_code = rng.choice(VENDORS)
@@ -259,7 +264,9 @@ def _view(spec: InvoiceSpec) -> dict[str, Any]:
             }
             for index, item in enumerate(spec.items)
         ],
-        "tax_rate": f"{spec.tax_rate.normalize():f}%",
+        "tax_rate": format_rate(spec.tax_rate),
+        # Intra-state supply charges half the rate as CGST and half as SGST.
+        "half_rate": format_rate(spec.tax_rate / 2),
         "subtotal": show(spec.subtotal),
         "cgst": show(spec.cgst),
         "sgst": show(spec.sgst),
@@ -308,8 +315,8 @@ def _totals_html(v: dict[str, Any]) -> str:
         tax_rows = f"<tr><td>IGST @ {v['tax_rate']}</td><td class='num'>{v['igst']}</td></tr>"
     else:
         tax_rows = (
-            f"<tr><td>CGST @ {v['tax_rate']}</td><td class='num'>{v['cgst']}</td></tr>"
-            f"<tr><td>SGST @ {v['tax_rate']}</td><td class='num'>{v['sgst']}</td></tr>"
+            f"<tr><td>CGST @ {v['half_rate']}</td><td class='num'>{v['cgst']}</td></tr>"
+            f"<tr><td>SGST @ {v['half_rate']}</td><td class='num'>{v['sgst']}</td></tr>"
         )
     return (
         f"<table class='totals'>"
@@ -442,6 +449,24 @@ def render_image(html: str, width: int = 900, height: int = 1300) -> Any:
     from PIL import Image
 
     return Image.open(io.BytesIO(png)).convert("RGB")
+
+
+def render_text(html: str) -> str:
+    """Return the *visible* text of a rendered document.
+
+    Unlike substring-matching the HTML source, this reflects what the layout
+    engine actually displays, so it catches content hidden or clipped by CSS.
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_page(viewport={"width": 900, "height": 1300})
+            page.set_content(html, wait_until="load")
+            return page.inner_text("body")
+        finally:
+            browser.close()
 
 
 def augment(image: Any, rng: random.Random) -> Any:
