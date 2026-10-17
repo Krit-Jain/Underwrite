@@ -44,7 +44,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"smoke test cannot run: {exc}", file=sys.stderr)
         return 2
 
-    print(json.dumps(result.fields, indent=2, ensure_ascii=False))
+    if result.fields:
+        print(json.dumps(result.fields, indent=2, ensure_ascii=False))
+    else:
+        print("warning: model output was not valid JSON; raw output follows", file=sys.stderr)
+        print(result.text, file=sys.stderr)
+
     print(
         f"model={result.model_id} seconds={result.seconds:.2f} "
         f"peak_vram_mb={result.peak_vram_mb:.0f}"
