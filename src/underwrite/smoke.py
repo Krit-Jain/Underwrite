@@ -2,8 +2,7 @@
 
 This is the Phase 0 smoke test: it proves the model loads in 4-bit, runs on a single
 receipt, and reports peak VRAM and wall-clock seconds per document. Heavy imports
-(``torch``/``transformers``) are deferred so the rest of the package stays importable
-without a GPU toolchain installed.
+are deferred, so the rest of the package stays importable without a GPU toolchain.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from typing import Any
 
 from underwrite.config import Config
 from underwrite.extract.parse import ParseError, extract_json_object
-from underwrite.extract.prompts import SYSTEM_INSTRUCTION, build_extraction_prompt
+from underwrite.extract.vlm import build_messages, generate, load_vision_model
 
 _SAMPLE_LINES = (
     "SUNRISE TRADERS",
@@ -72,44 +71,6 @@ def render_sample_receipt(width: int = 520, height: int = 660) -> Any:
     return image
 
 
-def _load_processor_and_model(
-    model_id: str,
-    revision: str | None,
-    compute_dtype: str,
-    load_in_4bit: bool,
-    device_map: Any = None,
-) -> tuple[Any, Any]:
-    import torch
-    from transformers import AutoProcessor, BitsAndBytesConfig
-
-    try:
-        from transformers import AutoModelForImageTextToText as model_class
-    except ImportError:  # pragma: no cover - older transformers releases
-        from transformers import AutoModelForVision2Seq as model_class
-
-    dtype = getattr(torch, compute_dtype)
-    if device_map is None:
-        # "auto" splits a quantized model onto CPU when free VRAM looks tight, which
-        # the 4-bit quantizer rejects. Pin the whole model to the GPU instead.
-        device_map = {"": 0} if torch.cuda.is_available() else "auto"
-
-    model_kwargs: dict[str, Any] = {"device_map": device_map}
-    if load_in_4bit:
-        model_kwargs["quantization_config"] = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=dtype,
-            bnb_4bit_use_double_quant=True,
-        )
-    else:
-        model_kwargs["torch_dtype"] = dtype
-
-    processor = AutoProcessor.from_pretrained(model_id, revision=revision)
-    model = model_class.from_pretrained(model_id, revision=revision, **model_kwargs)
-    model.eval()
-    return processor, model
-
-
 def run_smoke_test(
     config: Config,
     image_path: str | Path | None = None,
@@ -123,9 +84,6 @@ def run_smoke_test(
             'PyTorch is not installed. Install the ML extras first: pip install -e ".[ml]"'
         ) from exc
 
-    model_id = config.model.id
-    budget = max_new_tokens or config.model.max_new_tokens
-
     if image_path is None:
         image = render_sample_receipt()
     else:
@@ -133,41 +91,16 @@ def run_smoke_test(
 
         image = Image.open(Path(image_path)).convert("RGB")
 
-    processor, model = _load_processor_and_model(
-        model_id,
-        config.model.revision,
-        config.model.compute_dtype,
-        config.model.quantization == "nf4",
-    )
-
-    messages = [
-        {"role": "system", "content": SYSTEM_INSTRUCTION},
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": build_extraction_prompt(config.signals.fields)},
-            ],
-        },
-    ]
-    inputs = processor.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(model.device)
+    processor, model = load_vision_model(config)
+    messages = build_messages(image, config.signals.fields)
+    budget = max_new_tokens or config.model.max_new_tokens
 
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
     started = perf_counter()
-    with torch.inference_mode():
-        generated = model.generate(**inputs, max_new_tokens=budget, do_sample=config.model.do_sample)
+    text = generate(processor, model, messages, budget, config.model.do_sample)
     seconds = perf_counter() - started
-
-    new_tokens = generated[:, inputs["input_ids"].shape[-1] :]
-    text = processor.batch_decode(new_tokens, skip_special_tokens=True)[0]
 
     peak_vram_mb = (
         torch.cuda.max_memory_allocated() / (1024**2) if torch.cuda.is_available() else 0.0
@@ -179,7 +112,7 @@ def run_smoke_test(
         fields = {}
 
     return SmokeResult(
-        model_id=model_id,
+        model_id=config.model.id,
         text=text,
         fields=fields,
         seconds=seconds,
