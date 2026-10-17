@@ -77,6 +77,7 @@ def _load_processor_and_model(
     revision: str | None,
     compute_dtype: str,
     load_in_4bit: bool,
+    device_map: Any = None,
 ) -> tuple[Any, Any]:
     import torch
     from transformers import AutoProcessor, BitsAndBytesConfig
@@ -87,7 +88,12 @@ def _load_processor_and_model(
         from transformers import AutoModelForVision2Seq as model_class
 
     dtype = getattr(torch, compute_dtype)
-    model_kwargs: dict[str, Any] = {"device_map": "auto"}
+    if device_map is None:
+        # "auto" splits a quantized model onto CPU when free VRAM looks tight, which
+        # the 4-bit quantizer rejects. Pin the whole model to the GPU instead.
+        device_map = {"": 0} if torch.cuda.is_available() else "auto"
+
+    model_kwargs: dict[str, Any] = {"device_map": device_map}
     if load_in_4bit:
         model_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,
