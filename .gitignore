@@ -31,6 +31,9 @@ htmlcov/
 /.cache/
 /models/
 
+# --- Regenerable experiment logs (large, reproduce with the scripts) ---
+/reports/traces/
+
 # --- Editors and OS ---
 .idea/
 .vscode/
