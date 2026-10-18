@@ -92,12 +92,17 @@ def repair_curve(
     n_draws: int = 50,
     seed: int = 0,
     grid: Sequence[float] | None = None,
+    include_source: bool = True,
 ) -> pd.DataFrame:
-    """Recalibrate with ``k`` labelled target documents added to the source calibration.
+    """Recalibrate with ``k`` labelled target documents.
 
     Each draw labels a random ``k`` of the target documents, recalibrates, and scores
     the remaining target documents -- so the added labels are never used to grade the
     documents they came from.
+
+    With ``include_source=False`` the recalibration uses only the ``k`` target
+    documents. That answers the business question directly: how many labelled
+    documents does a new client's template need before its certificate is valid.
     """
     source_scores = np.asarray(source_scores, dtype=float)
     source_errors = np.asarray(source_errors, dtype=float)
@@ -122,8 +127,12 @@ def repair_curve(
             order = rng.permutation(target_scores.size)
             labelled, heldout = order[:k], order[k:]
 
-            calibration_scores = np.concatenate([source_scores, target_scores[labelled]])
-            calibration_errors = np.concatenate([source_errors, target_errors[labelled]])
+            if include_source:
+                calibration_scores = np.concatenate([source_scores, target_scores[labelled]])
+                calibration_errors = np.concatenate([source_errors, target_errors[labelled]])
+            else:
+                calibration_scores = target_scores[labelled]
+                calibration_errors = target_errors[labelled]
 
             result = certify(calibration_scores, calibration_errors, alpha, delta, grid)
             if not result.certified:

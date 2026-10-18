@@ -109,3 +109,22 @@ def test_repair_curve_rejects_k_larger_than_the_corpus():
 def test_repair_curve_rejects_mismatched_lengths():
     with pytest.raises(ValueError):
         repair_curve([0.1, 0.2], [0], [0.1, 0.2], [0, 0], ks=[1], alpha=0.1, delta=0.1)
+
+
+def test_target_only_repair_ignores_the_source_corpus():
+    """Calibrating on the target documents alone is what a new client template needs."""
+    rng = np.random.default_rng(11)
+    target_scores, target_errors = draw(rng, 400, error_scale=0.5)
+    # A source corpus that would certify everything: it must not leak into the repair.
+    source_scores = np.linspace(0, 1, 400)
+    source_errors = np.zeros(400, dtype=int)
+
+    pooled = repair_curve(
+        source_scores, source_errors, target_scores, target_errors,
+        ks=[100], alpha=0.10, delta=0.1, n_draws=5, seed=12, include_source=True,
+    )
+    target_only = repair_curve(
+        source_scores, source_errors, target_scores, target_errors,
+        ks=[100], alpha=0.10, delta=0.1, n_draws=5, seed=12, include_source=False,
+    )
+    assert not pooled.equals(target_only)

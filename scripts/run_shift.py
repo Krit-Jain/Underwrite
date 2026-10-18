@@ -36,6 +36,12 @@ def main() -> int:
     parser.add_argument("--alphas", nargs="+", type=float, default=[0.10, 0.05])
     parser.add_argument("--delta", type=float, default=0.1)
     parser.add_argument("--ks", nargs="+", type=int, default=[25, 50, 100])
+    parser.add_argument(
+        "--include-source",
+        action="store_true",
+        help="pool the source calibration with the k labelled target documents "
+        "(default: calibrate on the k target documents alone)",
+    )
     parser.add_argument("--n-draws", type=int, default=50)
     parser.add_argument("--seed", type=int, default=20261017)
     parser.add_argument("--out", default="reports/tables/shift.csv")
@@ -91,6 +97,7 @@ def main() -> int:
                 args.delta,
                 n_draws=args.n_draws,
                 seed=args.seed,
+                include_source=args.include_source,
             )
             curve["method"] = method
             repairs.append(curve)
