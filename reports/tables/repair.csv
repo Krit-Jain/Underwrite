@@ -1,0 +1,19 @@
+k,alpha,n_draws,certified_rate,violation_rate,mean_coverage,sd_coverage,mean_risk,method
+25,0.3,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+50,0.3,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+100,0.3,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+25,0.2,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+50,0.2,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+100,0.2,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+25,0.1,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+50,0.1,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+100,0.1,50,0.0,0.0,0.0,0.0,,S3 black-box fusion
+25,0.3,50,1.0,0.0,0.004914285714285716,0.0019827830369025684,0.0,S5 probe + fusion
+50,0.3,50,1.0,0.0,0.005333333333333332,0.002666666666666667,0.0,S5 probe + fusion
+100,0.3,50,1.0,0.0,0.005600000000000001,0.004963869458396343,0.0,S5 probe + fusion
+25,0.2,50,0.0,0.0,0.0,0.0,,S5 probe + fusion
+50,0.2,50,0.0,0.0,0.0,0.0,,S5 probe + fusion
+100,0.2,50,0.0,0.0,0.0,0.0,,S5 probe + fusion
+25,0.1,50,0.0,0.0,0.0,0.0,,S5 probe + fusion
+50,0.1,50,0.0,0.0,0.0,0.0,,S5 probe + fusion
+100,0.1,50,0.0,0.0,0.0,0.0,,S5 probe + fusion

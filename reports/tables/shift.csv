@@ -1,0 +1,7 @@
+alpha,delta,certified,threshold,source_coverage,source_risk,target_coverage,target_risk,violated,method
+0.3,0.1,False,,0.0,,0.0,,False,S3 black-box fusion
+0.3,0.1,True,0.984,0.02422145328719723,0.0,0.005,0.0,False,S5 probe + fusion
+0.2,0.1,False,,0.0,,0.0,,False,S3 black-box fusion
+0.2,0.1,False,,0.0,,0.0,,False,S5 probe + fusion
+0.1,0.1,False,,0.0,,0.0,,False,S3 black-box fusion
+0.1,0.1,False,,0.0,,0.0,,False,S5 probe + fusion
