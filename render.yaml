@@ -1,0 +1,10 @@
+# Render blueprint for the demo UI. The model runs locally; this only serves the
+# precomputed batch, so no GPU and no model download are needed.
+services:
+  - type: web
+    name: underwrite-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
