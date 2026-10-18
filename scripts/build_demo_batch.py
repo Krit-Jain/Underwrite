@@ -116,15 +116,12 @@ def main() -> int:
     rng = np.random.default_rng(args.seed)
 
     documents = []
-    audit_count = 0
     for _, row in test.iterrows():
         doc_id = row["doc_id"]
         score = float(row[args.method])
         decision = (
             DECISION_AUTO if threshold is not None and score >= threshold else DECISION_REVIEW
         )
-        audit = decision == DECISION_AUTO and rng.random() < args.audit_rate
-        audit_count += int(audit)
 
         meta = document_meta(features_dir, doc_id)
         extracted = meta.get("extracted", {})
@@ -144,7 +141,7 @@ def main() -> int:
                     "decision": field_decision,
                     "confidence": round(score, 4) if name == args.field else None,
                     "certified": name == args.field,
-                    "audit": audit and name == args.field,
+                    "audit": False,
                 }
             )
 
@@ -157,7 +154,30 @@ def main() -> int:
             }
         )
 
-    decisions = [field["decision"] for document in documents for field in document["fields"]]
+    # Mark a deterministic audit sample so the marker always appears in the demo.
+    auto_positions = [
+        index
+        for index, document in enumerate(documents)
+        if any(field["certified"] and field["decision"] == DECISION_AUTO for field in document["fields"])
+    ]
+    audit_count = 0
+    if auto_positions:
+        wanted = max(1, round(args.audit_rate * len(auto_positions)))
+        for position in rng.choice(auto_positions, size=min(wanted, len(auto_positions)), replace=False):
+            for field in documents[int(position)]["fields"]:
+                if field["certified"]:
+                    field["audit"] = True
+            audit_count += 1
+
+    # The certificate covers the certified field only. Counting the always-review
+    # fields alongside it would understate the auto-accept rate for a promise that was
+    # never made about them.
+    decisions = [
+        field["decision"]
+        for document in documents
+        for field in document["fields"]
+        if field["certified"]
+    ]
     certificate = build_certificate(
         decisions,
         alpha=alpha or args.alphas[-1],

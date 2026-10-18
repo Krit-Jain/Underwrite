@@ -94,6 +94,13 @@ def _matrix(frame: pd.DataFrame, columns: Sequence[str]) -> np.ndarray:
     if "first_token_entropy" in columns:
         # Entropy points the other way: more entropy means less confidence.
         values[:, list(columns).index("first_token_entropy")] *= -1.0
+    # A corpus captured without one of the signals (verbalized, say) leaves a column
+    # entirely missing. Collapse it to a constant so the imputer and the model see
+    # finite numbers instead of NaN.
+    medians = np.nanmedian(values, axis=0) if values.size else np.array([])
+    for index in range(values.shape[1]):
+        if np.isnan(medians[index]):
+            values[:, index] = 0.0
     return values
 
 
@@ -198,11 +205,17 @@ def fit_scorers(
     )
     validators = _logistic_pipeline().fit(_matrix(train, CHECK_NAMES), labels)
 
+    # A corpus captured without the self-rating call has no verbalized scores at all.
+    # Fall back to a flat 0.5 so S1 degrades to an uninformative baseline rather than
+    # poisoning every downstream metric with NaN.
+    logprob_fill = train["mean_logprob"].median()
+    verbalized_fill = train["verbalized"].median()
+
     return Scorers(
         field=field,
         choice=choice,
-        logprob_fill=float(train["mean_logprob"].median()),
-        verbalized_fill=float(train["verbalized"].median()),
+        logprob_fill=float(logprob_fill) if pd.notna(logprob_fill) else 0.0,
+        verbalized_fill=float(verbalized_fill) if pd.notna(verbalized_fill) else 0.5,
         validators=validators,
         black_box=black_box,
         probe=probe_pipeline,

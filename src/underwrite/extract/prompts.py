@@ -29,7 +29,11 @@ SYSTEM_INSTRUCTION = (
 _VALUE_RULES = (
     "Rules: money fields (subtotal, tax, total) are plain decimals with two places and no "
     "currency symbol or thousands separator; the date is ISO 8601 (YYYY-MM-DD); the vendor "
-    "is copied verbatim from the document."
+    "is copied verbatim from the document.\n"
+    "Watch the separators. Many receipts -- Indonesian ones especially -- use '.' or ',' "
+    "purely as a thousands separator and have no minor unit. On such a document '60.000' "
+    "means sixty thousand and must be returned as 60000.00, not as 60.00. A separator "
+    "followed by exactly three digits is a thousands group, not a decimal point."
 )
 
 
