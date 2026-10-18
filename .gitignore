@@ -39,3 +39,5 @@ htmlcov/
 .vscode/
 .DS_Store
 Thumbs.db
+
+/reports/tables/dry_run_table.txt
