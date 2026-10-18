@@ -47,7 +47,7 @@ class Certificate:
         return self.auto_fields / self.total_fields if self.total_fields else 0.0
 
     def caveat(self) -> str:
-        """The guarantee, stated together with the assumption it rests on."""
+        """The guarantee, stated with the assumption it rests on."""
         if not self.certified:
             return (
                 "This batch is not certified. With the calibration data available, no "
@@ -56,14 +56,14 @@ class Certificate:
                 "was routed to review."
             )
         return (
-            f"With {1 - self.delta:.0%} confidence, the error rate among the "
-            f"{self.auto_fields} auto-accepted fields is at most {self.alpha:.0%}. "
-            f"The threshold was set on {self.calibration_documents} labelled documents, "
-            f"and {self.auto_rate:.0%} of this batch cleared it. That promise assumes "
-            "these documents resemble the calibration ones. If they don't -- a new "
-            "supplier layout, a different country, a changed template -- it can silently "
-            f"fail, which is why {self.audit_sample} auto-accepted fields are randomly "
-            "sampled for checking rather than trusting the certificate blindly."
+            f"With {1 - self.delta:.0%} confidence, the long-run error rate on documents "
+            f"like the {self.calibration_documents} labelled ones used for calibration is "
+            f"at most {self.alpha:.0%}. {self.auto_rate:.0%} of this batch cleared the "
+            "threshold; that describes this batch, not the guarantee -- the promise is "
+            "about the population of similar documents, and it holds only while new "
+            "documents resemble the calibration ones. A new supplier layout, a different "
+            "country or a changed template can break it silently, which is why "
+            f"{self.audit_sample} auto-accepted fields are randomly sampled for checking."
         )
 
     def as_dict(self) -> dict[str, object]:

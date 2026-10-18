@@ -8,9 +8,9 @@ model:
   # Gemma 4 E2B: the edge variant that actually fits a 6 GB laptop.
   # E4B was measured to NOT fit -- its per-layer input embeddings (~5.6 GB) plus the
   # text tower exceed 6 GB even at 4-bit, and transformers falls back to CPU/disk.
-  # Pin `revision` to a commit hash once the first full run succeeds.
+  # `revision` is pinned: a calibration is only valid against frozen weights.
   id: google/gemma-4-E2B-it
-  revision: null
+  revision: 3e22461f65e89153144f8adb70e3b8c2cc9845a7
   quantization: nf4
   compute_dtype: bfloat16
   max_new_tokens: 512

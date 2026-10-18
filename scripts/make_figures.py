@@ -160,13 +160,47 @@ def figure_repair(repair: pd.DataFrame, out: Path) -> None:
 def figure_audit(audit: pd.DataFrame, out: Path) -> None:
     switch_at = int(audit["switch_at"].iloc[0])
     figure, ax = plt.subplots(figsize=(6.8, 3.3), dpi=160)
-    ax.plot(audit["position"], audit["upper_bound"], color=ACCENT, linewidth=1.8)
-    ax.axvline(switch_at, color="#dc2626", linestyle="--", linewidth=1.2)
-    ax.text(switch_at, ax.get_ylim()[1] * 0.92, " new template", color="#dc2626", fontsize=8)
-    ax.axhline(0.10, color="#cbd5e1", linestyle=":", linewidth=1)
-    ax.text(audit["position"].iloc[-1], 0.104, "α = 0.10 ", ha="right", fontsize=7, color=MUTED)
-    style(ax, "Audit lane: Clopper-Pearson upper bound on accepted-error rate",
-          "Accepted documents in the stream", "Upper bound on error rate")
+    ax.plot(audit["position"], audit["lower_bound"], color=ACCENT, linewidth=1.8,
+            label="lower bound (alarms above α)")
+    ax.plot(audit["position"], audit["upper_bound"], color=MUTED, linewidth=1.0,
+            linestyle=":", label="upper bound")
+    ax.axhline(0.10, color="#dc2626", linestyle="--", linewidth=1.0)
+    ax.text(audit["position"].iloc[-1], 0.104, "α = 0.10 ", ha="right", fontsize=7, color="#dc2626")
+    ax.axvline(switch_at, color="#7c3aed", linestyle="--", linewidth=1.2)
+    ax.text(switch_at, ax.get_ylim()[1] * 0.92, " template change", color="#7c3aed", fontsize=8)
+    style(ax, "Audit lane: does the accepted error rate exceed α?",
+          "Accepted documents in the stream", "Error-rate bound")
+    ax.legend(frameon=False, fontsize=7.5, labelcolor=MUTED, loc="upper left")
+    figure.tight_layout()
+    figure.savefig(out, bbox_inches="tight")
+    plt.close(figure)
+
+
+def figure_no_grounding(with_grounding: pd.DataFrame, without: pd.DataFrame, out: Path) -> None:
+    left = with_grounding[with_grounding["field"] == "total"].set_index("method")["auroc"]
+    right = without[without["field"] == "total"].set_index("method")["auroc"]
+    methods = [m for m in ("S2g grounding", "S3 black-box fusion", "S4 probe", "S5 probe + fusion")
+               if m in left.index and m in right.index]
+
+    figure, ax = plt.subplots(figsize=(6.4, 3.2), dpi=160)
+    positions = np.arange(len(methods))
+    width = 0.38
+    ax.bar(positions - width / 2, [left[m] for m in methods], width, label="with grounding",
+           color=ACCENT)
+    ax.bar(positions + width / 2, [right[m] for m in methods], width, label="grounding = 0",
+           color="#94a3b8")
+    for index, method in enumerate(methods):
+        ax.text(index - width / 2, left[method] + 0.01, f"{left[method]:.3f}", ha="center", fontsize=7.5, color=MUTED)
+        ax.text(index + width / 2, right[method] + 0.01, f"{right[method]:.3f}", ha="center", fontsize=7.5, color=MUTED)
+    ax.set_xticks(positions)
+    ax.set_xticklabels([m.replace(" black-box fusion", "\nblack-box").replace(" probe + fusion", "\nprobe+fusion")
+                        .replace(" probe", "\nprobe").replace("S2g grounding", "grounding") for m in methods],
+                       fontsize=7.5)
+    ax.axhline(0.5, color="#cbd5e1", linestyle="--", linewidth=1)
+    style(ax, "The probe's advantage does not depend on perfect OCR (`total`)", "", "AUROC")
+    ax.set_ylim(0.4, 1.02)
+    ax.legend(frameon=False, fontsize=7.5, labelcolor=MUTED, loc="upper left")
+    ax.grid(axis="x", visible=False)
     figure.tight_layout()
     figure.savefig(out, bbox_inches="tight")
     plt.close(figure)
@@ -206,6 +240,11 @@ def main() -> int:
     if audit_path.is_file():
         figure_audit(pd.read_csv(audit_path), out / "audit.png")
         print(f"wrote {out / 'audit.png'}")
+
+    no_grounding_path = tables / "ablation_no_grounding.csv"
+    if no_grounding_path.is_file():
+        figure_no_grounding(ablation, pd.read_csv(no_grounding_path), out / "no_grounding.png")
+        print(f"wrote {out / 'no_grounding.png'}")
 
     return 0
 

@@ -1,0 +1,8 @@
+scenario,true_error,audit_rate,false_alarm_rate,median_delay,p90_delay,missed_rate,seeds
+clean,0.02,0.1,0.0,,,,500
+clean,0.04,0.1,0.0,,,,500
+clean,0.06,0.1,0.002,,,,500
+clean,0.08,0.1,0.004,,,,500
+drift,0.4,0.05,,410.0,484.5,0.728,500
+drift,0.4,0.1,,406.5,480.3,0.464,500
+drift,0.4,0.2,,356.5,459.3,0.124,500

@@ -36,9 +36,20 @@ def main() -> int:
     parser.add_argument("--fields", nargs="+", default=["total"])
     parser.add_argument("--out", default="reports/tables/ablation.csv")
     parser.add_argument("--seed", type=int, default=20261017)
+    parser.add_argument(
+        "--no-grounding",
+        action="store_true",
+        help="zero the grounding signal, to show the ablation without it",
+    )
     args = parser.parse_args()
 
     frame = pd.read_csv(args.table)
+    if args.no_grounding:
+        # Grounding uses oracle page text, so the headline numbers are optimistic.
+        # Reporting the ablation without it shows the probe's benefit does not depend
+        # on perfect OCR.
+        frame["grounding"] = 0.0
+        print("grounding disabled: every grounding feature set to 0")
     layers = recorded_layers(Path(args.features_dir))
     print(f"probe layers available: {layers}")
 

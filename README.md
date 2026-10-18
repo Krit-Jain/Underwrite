@@ -6,9 +6,16 @@ vague accuracy claim.
 Every batch comes with a certificate: *N documents, per-field error rate ≤ α with confidence
 1 − δ, X% auto-processed, the rest routed to a human.*
 
-> **Status:** early scaffolding. The model harness and configuration layer exist; the probe,
-> conformal gate, and review UI are in progress. Numbers in the write-up will be produced by the
-> scripts in this repository — never estimated.
+> **Status:** working end to end. Extraction, signal capture, the hidden-state probe, the
+> conformal gate, resplit validity, shift/repair and the audit lane all run; the review UI
+> serves a precomputed demo batch. Every number below is produced by a script in this
+> repository and committed under `reports/`.
+>
+> **Headline** (CORD, `total`, 972 labelled documents): the hidden-state probe reaches AUROC
+> **0.952** against **0.838** for the strongest black-box stack, and auto-processes **49.7%**
+> of totals at a 5% error budget versus 14.7%. Over 200 random resplits it certifies in every
+> split at 48.1% mean coverage (α=0.10) and 29.4% (α=0.05), against 39.5% and 2.0% for the
+> black-box baseline.
 
 ## The problem
 
@@ -52,6 +59,49 @@ verbalized confidence, validators, source grounding)?
                             certificate + CSV/JSON export
 ```
 
+## Results
+
+Every table below is a committed script output in `reports/tables/`; every figure is in
+`reports/figures/`.
+
+**Extraction.** CORD, 983 documents, `google/gemma-4-E2B-it` in 4-bit NF4 on a 6 GB laptop
+GPU: **9.06 s/document**, 2.47 h for the corpus, 6573 MB peak VRAM, 983/983 value spans
+aligned to tokens, 2 unparseable responses. `total` is correct on **58.6%** of documents, and
+**84%** of the errors arrive with near-certain token probabilities.
+
+**Ablation** (`total`, n=292 held-out, base error 38.0%):
+
+| method | AUROC | coverage @2% | @5% | @10% |
+|---|---|---|---|---|
+| S0 log-probability | 0.632 | 1.0% | 1.0% | 1.0% |
+| S2 validators | 0.525 | 1.4% | 1.4% | 1.4% |
+| S2g grounding | 0.725 | 0.3% | 0.3% | 0.3% |
+| S3 black-box fusion | 0.838 | 8.2% | 14.7% | 46.2% |
+| S4 probe only | 0.914 | 17.5% | 30.5% | 51.7% |
+| **S5 probe + fusion** | **0.952** | **41.4%** | **49.7%** | **62.0%** |
+
+**Without grounding** (`--no-grounding`, the oracle page text removed): S3 falls to 0.729 and
+S5 holds 0.915. The probe's advantage does not depend on perfect OCR — if anything it grows.
+
+**Validity** (200 random resplits of the pooled calibration+test documents):
+
+| α | method | certified | mean coverage | violations |
+|---|---|---|---|---|
+| 0.10 | S3 black-box | 39.5% | 10.9% | 8.0% |
+| 0.10 | S5 probe+fusion | 100% | 48.1% | 11.5% |
+| 0.05 | S3 black-box | 2.0% | — | 2.0% |
+| 0.05 | S5 probe+fusion | 100% | 29.4% | 6.0% |
+
+**Shift and repair.** A CORD-calibrated gate deployed on synthetic Indian GST invoices keeps
+its promise but loses almost all coverage (42.9% → 2.5%), because the confidence distribution
+shifts even though the target corpus is easier. Recalibrating on labelled target documents
+repairs it: **k=50 gives 100% certification at ~93% coverage for α=0.10; k=100 gives ~92% at
+α=0.05.**
+
+**Audit lane** (500 seeds): false alarms on clean streams run at **0.0–0.4%** against a 5%
+budget. A 40% drift is caught with a median delay of ~406 accepted documents at a 10% audit
+rate — but **46% of drifts are missed** in a 500-document window at that rate.
+
 ## Install
 
 ```bash
@@ -64,8 +114,10 @@ pip install -e ".[ml]"
 ```
 
 PyTorch is best installed from the official selector for your CUDA build; see
-<https://pytorch.org>. Gemma is gated on Hugging Face — accept the license and export a read token
-(`HF_TOKEN`) before running the smoke test. Never commit the token.
+<https://pytorch.org>. Gemma 4 is Apache-2.0 and **not gated** — no license acceptance or
+token is required. A read token is still worth setting for rate limits; never commit it.
+The model revision is pinned in `configs/default.yaml`, because a calibration is only valid
+against frozen weights.
 
 ## Quickstart
 
@@ -126,10 +178,26 @@ This project builds directly on open work and does **not** claim their ideas as 
 
 ## Limitations
 
-- The guarantee assumes new documents are exchangeable with the calibration documents. The audit
-  lane exists because that assumption can fail.
-- Calibration sets are small; only error budgets the data supports are certified.
-- 4-bit quantization and a single small model bound achievable coverage.
+- **The certificate covers `total` only.** `total` has one value per document, so calibration
+  samples are independent. A per-field guarantee on the other fields would be invalid — a
+  document's fields are correlated, which is exactly the failure mode described in
+  arXiv:2608.14639.
+- **Grounding uses oracle page text.** CORD's ground-truth OCR words and the synthetic
+  renderer's own text stand in for a real OCR pass, so absolute coverage is optimistic. The
+  `--no-grounding` ablation shows the S3-vs-S5 comparison does not depend on it.
+- **The verbalized baseline is absent from the final numbers.** The last extraction run
+  omitted the self-rating call to halve runtime, so S1 is a constant there. It was measured on
+  the earlier run at AUROC 0.603 for `total`.
+- **~290 calibration documents is thin.** α=0.05 sits at the edge of feasibility, and the
+  α=0.10 violation rate over resplits (11.5%) is slightly above δ=10%.
+- **The audit lane misses most drift in a short window.** At a 10% audit rate, 46% of 40%
+  drifts go undetected within 500 documents. False alarms stay well under the 5% budget, so
+  the failure mode is a late alarm rather than a noisy one.
+- **A 2B model on a 6 GB card sets the accuracy ceiling** — 38% error on `total`. A larger
+  model would raise coverage; it would not change the machinery.
+- **Exchangeability is assumed**, and the audit lane exists because that assumption can fail.
+- CORD is Indonesian (CC-BY-4.0) and annotates no vendor or date, so the five-field story is
+  necessarily a three-field one on this corpus.
 
 ## License
 

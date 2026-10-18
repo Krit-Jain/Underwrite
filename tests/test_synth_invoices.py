@@ -144,6 +144,24 @@ def test_rate_formatting(rate, expected):
     assert format_rate(rate) == expected
 
 
+def test_perfect_extraction_is_fully_grounded_on_synthetic_invoices():
+    """Synthetic invoices carry paise, so grounding must use the '.' convention.
+
+    With the rupiah convention (``decimal_sep=""``) a matched amount is compared as
+    ``9297.68`` against a page token mangled to ``929768``, and grounding collapses.
+    """
+    from underwrite.data.synth_invoices import page_tokens as spec_page_tokens
+    from underwrite.signals.grounding import grounding_support
+
+    specs = generate_specs(300, seed=20261017)
+    for spec in specs:
+        tokens = spec_page_tokens(spec)
+        for field in ("total", "subtotal"):
+            assert grounding_support(
+                field, spec.gold[field], tokens, decimal_sep="."
+            ) == 1.0, f"{spec.doc_id} {field} not grounded"
+
+
 @pytest.mark.parametrize(
     "amount,style,expected",
     [

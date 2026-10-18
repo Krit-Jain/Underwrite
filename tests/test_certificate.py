@@ -56,10 +56,18 @@ def test_the_caveat_states_the_guarantee_and_the_assumption():
     assert "silently" in caveat
 
 
+def test_the_caveat_promises_a_long_run_rate_not_a_property_of_this_batch():
+    caveat = make([DECISION_AUTO] * 8 + [DECISION_REVIEW] * 2).caveat()
+    assert "long-run error rate" in caveat
+    assert "not the guarantee" in caveat
+    # The old wording claimed the rate was bounded among this batch's fields.
+    assert "among the" not in caveat
+
+
 def test_caveat_numbers_match_the_record():
     certificate = make([DECISION_AUTO] * 3 + [DECISION_REVIEW] * 1, audit_sample=2)
     caveat = certificate.caveat()
-    assert f"{certificate.auto_fields} auto-accepted" in caveat
+    assert f"{certificate.calibration_documents}" in caveat
     assert f"{certificate.auto_rate:.0%}" in caveat
     assert f"{certificate.audit_sample} auto-accepted fields" in caveat
 

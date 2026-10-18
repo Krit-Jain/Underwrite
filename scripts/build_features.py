@@ -69,13 +69,22 @@ def main() -> int:
         tokens_by_doc = synthetic_tokens(len(records), args.seed)
 
     rows: list[dict[str, object]] = []
+    # The money convention must match the corpus. CORD receipts are Indonesian rupiah:
+    # '.' and ',' are thousands separators and there is no minor unit. The synthetic
+    # Indian invoices carry paise, so their '.' really is a decimal point. Using the
+    # rupiah convention on them turned a matched amount into a mismatch whenever the
+    # model returned a JSON number instead of a string.
+    decimal_sep = "" if args.source == "cord" else "."
+
     for record in records:
         doc_id = record["doc_id"]
         extracted = record["extracted"]
         gold = record["gold"]
         tokens = tokens_by_doc.get(doc_id, [])
 
-        grounding = document_grounding(extracted, tokens, config.signals.fields, decimal_sep="")
+        grounding = document_grounding(
+            extracted, tokens, config.signals.fields, decimal_sep=decimal_sep
+        )
         verbalized = record.get("verbalized", {})
         checks = record.get("validators", {})
 

@@ -40,6 +40,13 @@ def main() -> int:
     parser.add_argument("--delta", type=float, default=0.1)
     parser.add_argument("--audit-rate", type=float, default=0.10)
     parser.add_argument("--accepted-fraction", type=float, default=0.30)
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=4,
+        help="repeat the accepted set to lengthen the stream; the correct alarm rule "
+        "needs more audits than one test split provides",
+    )
     parser.add_argument("--drift-error", type=float, default=0.40)
     parser.add_argument("--seed", type=int, default=20261017)
     parser.add_argument("--out", default="reports/tables/audit_trajectory.csv")
@@ -86,9 +93,9 @@ def main() -> int:
         f"illustrative operating point: accept top {args.accepted_fraction:.0%} "
         f"(certified coverage would be {result.coverage:.3f})"
     )
-    clean_errors = (1 - accepted["correct"].to_numpy(dtype=int)).astype(int)
+    clean_errors = np.tile((1 - accepted["correct"].to_numpy(dtype=int)).astype(int), args.repeats)
     clean_rate = float(clean_errors.mean()) if clean_errors.size else 0.0
-    print(f"clean segment: {len(clean_errors)} accepted, error {clean_rate:.3f}")
+    print(f"clean segment: {clean_errors.size} accepted (repeated x{args.repeats}), error {clean_rate:.3f}")
 
     rng = np.random.default_rng(args.seed)
     drifted = (rng.random(clean_errors.size) < args.drift_error).astype(int)
