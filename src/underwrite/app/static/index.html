@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Underwrite — review</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --panel: #ffffff; --ink: #16181d; --muted: #6b7280;
+    --line: #e5e7eb; --auto: #0f7b4f; --auto-bg: #e8f5ee;
+    --review: #9a5b00; --review-bg: #fdf3e3; --fail: #a4232b; --fail-bg: #fbeaec;
+    --accent: #1f3a5f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 14px;
+    padding: 14px 22px; background: var(--accent); color: #fff;
+  }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: .2px; }
+  header .tag { font-size: 12px; opacity: .75; }
+  .banner {
+    padding: 7px 22px; background: #fff4d6; color: #6b4e00;
+    font-size: 12.5px; border-bottom: 1px solid #f0e0ad;
+  }
+  main { display: grid; grid-template-columns: 270px 1fr 320px; gap: 16px; padding: 16px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .panel h2 { margin: 0; padding: 11px 14px; font-size: 12px; letter-spacing: .08em;
+              text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .panel .body { padding: 12px 14px; }
+
+  #documents { max-height: 74vh; overflow: auto; }
+  .doc { display: flex; justify-content: space-between; gap: 8px; padding: 8px 14px;
+         border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+  .doc:hover { background: #f2f4f7; }
+  .doc[aria-current="true"] { background: #eaf0f7; box-shadow: inset 3px 0 0 var(--accent); }
+  .doc .id { font-variant-numeric: tabular-nums; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.auto { background: var(--auto); } .dot.review { background: var(--review); }
+
+  #viewer { display: grid; place-items: center; background: #eceef1; min-height: 300px; padding: 10px; }
+  #viewer img { max-width: 100%; max-height: 78vh; border: 1px solid var(--line); background: #fff; }
+
+  .field { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 9px; }
+  .field.auto { background: var(--auto-bg); border-color: #bfe3ce; }
+  .field.review { background: var(--review-bg); border-color: #f0dcb4; }
+  .field.fail { background: var(--fail-bg); border-color: #f3c9cd; }
+  .field .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .field label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .field input { width: 100%; margin-top: 5px; padding: 6px 8px; font: inherit;
+                 border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .field input[readonly] { background: transparent; border-color: transparent; padding-left: 0; font-weight: 600; }
+  .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 99px; border: 1px solid currentColor; }
+  .chip.auto { color: var(--auto); } .chip.review { color: var(--review); } .chip.fail { color: var(--fail); }
+  .audit { font-size: 10.5px; color: var(--accent); }
+
+  .cert dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0 0 10px; }
+  .cert dt { color: var(--muted); font-size: 12px; }
+  .cert dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .caveat { font-size: 12.5px; color: #3d4450; background: #f4f6f9; border-left: 3px solid var(--accent);
+            padding: 9px 11px; border-radius: 0 6px 6px 0; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  button { font: inherit; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--line);
+           background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .muted { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Underwrite</h1>
+  <span class="tag">local, open-weight extraction with a measured error guarantee</span>
+</header>
+<div class="banner" id="banner">
+  Demo mode — this batch is precomputed from the public CORD receipt corpus. No customer data, no GPU, no model download.
+</div>
+
+<main>
+  <section class="panel">
+    <h2>Batch</h2>
+    <div id="documents"></div>
+  </section>
+
+  <section class="panel">
+    <h2 id="current-doc">Document</h2>
+    <div id="viewer"><span class="muted">Loading…</span></div>
+  </section>
+
+  <section class="panel cert">
+    <h2>Certificate</h2>
+    <div class="body">
+      <dl id="cert-figures"></dl>
+      <div class="caveat" id="cert-caveat">Loading…</div>
+      <div class="actions">
+        <button class="primary" id="export-csv">Export CSV</button>
+        <button id="export-json">Export JSON</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<aside class="panel" style="margin:0 16px 16px">
+  <h2>Fields</h2>
+  <div class="body" id="fields"><span class="muted">Loading…</span></div>
+</aside>
+
+<script>
+const state = { batch: null, index: 0, edits: {} };
+
+const el = (id) => document.getElementById(id);
+
+function pct(value) { return (value * 100).toFixed(1) + "%"; }
+
+function decisionClass(field) {
+  if (field.value === null || field.value === undefined) return "fail";
+  return field.decision;
+}
+
+function renderDocuments() {
+  const list = el("documents");
+  list.innerHTML = "";
+  state.batch.documents.forEach((doc, index) => {
+    const certified = doc.fields.find((f) => f.certified);
+    const dotClass = certified && certified.decision === "auto" ? "auto" : "review";
+    const row = document.createElement("div");
+    row.className = "doc";
+    row.setAttribute("aria-current", index === state.index ? "true" : "false");
+    row.innerHTML = `<span class="id">${doc.doc_id}</span><span class="dot ${dotClass}"></span>`;
+    row.onclick = () => { state.index = index; render(); };
+    list.appendChild(row);
+  });
+}
+
+function renderViewer() {
+  const doc = state.batch.documents[state.index];
+  el("current-doc").textContent = doc.doc_id;
+  const viewer = el("viewer");
+  viewer.innerHTML = doc.image
+    ? `<img alt="${doc.doc_id}" src="${doc.image}">`
+    : `<span class="muted">image unavailable</span>`;
+}
+
+function renderFields() {
+  const doc = state.batch.documents[state.index];
+  const container = el("fields");
+  container.innerHTML = "";
+  doc.fields.forEach((field) => {
+    const cls = decisionClass(field);
+    const key = `${doc.doc_id}:${field.name}`;
+    const value = state.edits[key] ?? field.value;
+    const box = document.createElement("div");
+    box.className = `field ${cls}`;
+    const label = field.certified ? "" : ` <span class="chip review">not certified</span>`;
+    const confidence = field.confidence === null || field.confidence === undefined
+      ? "" : `<span class="muted">p = ${field.confidence.toFixed(3)}</span>`;
+    const audit = field.audit ? `<span class="audit">◈ audit sample</span>` : "";
+    box.innerHTML = `
+      <div class="row">
+        <label>${field.name}${label}</label>
+        <span class="chip ${cls}">${cls === "fail" ? "parse fail" : field.decision}</span>
+      </div>
+      <input ${cls === "auto" ? "readonly" : ""} value="${value ?? ""}" data-key="${key}">
+      <div class="row" style="margin-top:6px">${confidence}${audit}</div>
+    `;
+    if (cls !== "auto") {
+      box.querySelector("input").oninput = (event) => { state.edits[key] = event.target.value; };
+    }
+    container.appendChild(box);
+  });
+}
+
+function renderCertificate() {
+  const cert = state.batch.certificate;
+  const figures = [
+    ["Status", cert.certified ? "certified" : "not certified"],
+    ["Error budget (α)", pct(cert.alpha)],
+    ["Confidence (1−δ)", pct(1 - cert.delta)],
+    ["Threshold", cert.threshold === null ? "—" : cert.threshold.toFixed(3)],
+    ["Auto-processed", `${cert.auto_fields} / ${cert.total_fields} (${pct(cert.auto_rate)})`],
+    ["Routed to review", cert.review_fields],
+    ["Audit sample", cert.audit_sample],
+    ["Calibration docs", cert.calibration_documents],
+    ["Model", cert.model_id],
+  ];
+  el("cert-figures").innerHTML = figures
+    .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  el("cert-caveat").textContent = cert.caveat;
+}
+
+function render() { renderDocuments(); renderViewer(); renderFields(); renderCertificate(); }
+
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = name; link.click();
+  URL.revokeObjectURL(url);
+}
+
+function rows() {
+  return state.batch.documents.flatMap((doc) =>
+    doc.fields.map((field) => {
+      const key = `${doc.doc_id}:${field.name}`;
+      const value = state.edits[key] ?? field.value;
+      return { doc_id: doc.doc_id, field: field.name, value, decision: field.decision,
+               confidence: field.confidence, audited: field.audit, certified: field.certified };
+    }));
+}
+
+el("export-csv").onclick = () => {
+  const data = rows();
+  const header = Object.keys(data[0]).join(",");
+  const body = data.map((row) => Object.values(row).map((v) => `"${v ?? ""}"`).join(",")).join("\n");
+  download("underwrite-review.csv", `${header}\n${body}`, "text/csv");
+};
+
+el("export-json").onclick = () => {
+  download("underwrite-review.json", JSON.stringify({ certificate: state.batch.certificate, rows: rows() }, null, 2),
+           "application/json");
+};
+
+fetch("/api/batch")
+  .then((response) => response.json())
+  .then((batch) => {
+    if (batch.error) { el("banner").textContent = batch.error; return; }
+    state.batch = batch;
+    render();
+  })
+  .catch((error) => { el("banner").textContent = `Could not load the batch: ${error}`; });
+</script>
+</body>
+</html>
