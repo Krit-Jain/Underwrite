@@ -23,10 +23,10 @@ from underwrite.probe.train import TRAIN_SPLIT, apply_scorers, fit_scorers  # no
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-table", default="data/features_table_cord.csv")
-    parser.add_argument("--target-table", default="data/features_table_synthetic.csv")
-    parser.add_argument("--source-features", default="data/features")
-    parser.add_argument("--target-features", default="data/features_synthetic")
+    parser.add_argument("--source-table", default="data/features_table_v2.csv")
+    parser.add_argument("--target-table", default="data/features_table_v2_synthetic.csv")
+    parser.add_argument("--source-features", default="data/features_promptfix")
+    parser.add_argument("--target-features", default="data/features_v2_synth")
     parser.add_argument("--field", default="total")
     parser.add_argument(
         "--methods",
@@ -35,7 +35,7 @@ def main() -> int:
     )
     parser.add_argument("--alphas", nargs="+", type=float, default=[0.10, 0.05])
     parser.add_argument("--delta", type=float, default=0.1)
-    parser.add_argument("--ks", nargs="+", type=int, default=[25, 50, 100])
+    parser.add_argument("--ks", nargs="+", type=int, default=[25, 50, 100, 150])
     parser.add_argument(
         "--include-source",
         action="store_true",

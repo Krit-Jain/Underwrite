@@ -38,10 +38,23 @@ class ValiditySummary:
     mean_realised_risk: float
     sd_realised_risk: float
     p95_realised_risk: float
+    n_certified: int = 0
 
     @property
     def uncertified_rate(self) -> float:
         return 1.0 - self.certified_rate
+
+    @property
+    def conditional_violation_rate(self) -> float:
+        """Share of *certified* splits whose realised risk exceeded alpha.
+
+        ``violation_rate`` divides by every split, so it is diluted by the splits where
+        no certificate was issued at all. This is the rate a user actually cares about:
+        given that the procedure made a promise, how often did it break it?
+        """
+        if self.n_certified == 0:
+            return float("nan")
+        return self.violation_rate / self.certified_rate
 
 
 def resplit_validity(
@@ -106,6 +119,7 @@ def resplit_validity(
         mean_realised_risk=float(np.mean(risks)) if risks else 0.0,
         sd_realised_risk=float(np.std(risks)) if risks else 0.0,
         p95_realised_risk=float(np.percentile(risks, 95)) if risks else 0.0,
+        n_certified=certified,
     )
 
 
@@ -142,6 +156,8 @@ def evaluate_methods(
                     "delta": delta,
                     "certified_rate": summary.certified_rate,
                     "violation_rate": summary.violation_rate,
+                    "n_certified": summary.n_certified,
+                    "conditional_violation_rate": summary.conditional_violation_rate,
                     "mean_coverage": summary.mean_coverage,
                     "sd_coverage": summary.sd_coverage,
                     "mean_realised_risk": summary.mean_realised_risk,

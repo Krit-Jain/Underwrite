@@ -67,8 +67,8 @@ def document_meta(features_dir: Path, doc_id: str) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--table", default="data/features_table_cord.csv")
-    parser.add_argument("--features-dir", default="data/features")
+    parser.add_argument("--table", default="data/features_table_v2.csv")
+    parser.add_argument("--features-dir", default="data/features_promptfix")
     parser.add_argument("--field", default=CERTIFIED_FIELD)
     parser.add_argument("--method", default="S5 probe + fusion")
     parser.add_argument("--documents", type=int, default=20)

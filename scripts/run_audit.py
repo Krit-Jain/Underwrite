@@ -26,8 +26,8 @@ from underwrite.probe.train import TRAIN_SPLIT, apply_scorers, fit_scorers  # no
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--table", default="data/features_table_cord.csv")
-    parser.add_argument("--features-dir", default="data/features")
+    parser.add_argument("--table", default="data/features_table_v2.csv")
+    parser.add_argument("--features-dir", default="data/features_promptfix")
     parser.add_argument("--field", default="total")
     parser.add_argument("--method", default="S5 probe + fusion")
     parser.add_argument(
@@ -43,9 +43,11 @@ def main() -> int:
     parser.add_argument(
         "--repeats",
         type=int,
-        default=4,
+        default=7,
         help="repeat the accepted set to lengthen the stream; the correct alarm rule "
-        "needs more audits than one test split provides",
+        "needs more audits than one test split provides. The default brings the clean "
+        "segment to roughly the 600 documents used per segment in run_audit_detection.py, "
+        "so the two are comparable",
     )
     parser.add_argument("--drift-error", type=float, default=0.40)
     parser.add_argument("--seed", type=int, default=20261017)

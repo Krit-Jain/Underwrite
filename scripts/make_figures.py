@@ -210,8 +210,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tables", default="reports/tables")
     parser.add_argument("--out", default="reports/figures")
-    parser.add_argument("--features-dir", default="data/features")
-    parser.add_argument("--table", default="data/features_table_cord.csv")
+    parser.add_argument("--features-dir", default="data/features_promptfix")
+    parser.add_argument("--table", default="data/features_table_v2.csv")
     args = parser.parse_args()
 
     tables = Path(args.tables)

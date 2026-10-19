@@ -35,6 +35,7 @@ htmlcov/
 
 # --- Regenerable experiment logs (large, reproduce with the scripts) ---
 /reports/traces/
+/reports/demo_video/server.log
 
 # --- Editors and OS ---
 .idea/

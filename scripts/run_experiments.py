@@ -31,9 +31,9 @@ def recorded_layers(features_dir: Path) -> list[int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--table", default="data/features_table.csv")
-    parser.add_argument("--features-dir", default="data/features")
-    parser.add_argument("--fields", nargs="+", default=["total"])
+    parser.add_argument("--table", default="data/features_table_v2.csv")
+    parser.add_argument("--features-dir", default="data/features_promptfix")
+    parser.add_argument("--fields", nargs="+", default=["total", "subtotal", "tax"])
     parser.add_argument("--out", default="reports/tables/ablation.csv")
     parser.add_argument("--seed", type=int, default=20261017)
     parser.add_argument(

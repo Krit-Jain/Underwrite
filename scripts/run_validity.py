@@ -23,8 +23,8 @@ from underwrite.probe.train import score_all  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--table", default="data/features_table.csv")
-    parser.add_argument("--features-dir", default="data/features")
+    parser.add_argument("--table", default="data/features_table_v2.csv")
+    parser.add_argument("--features-dir", default="data/features_promptfix")
     parser.add_argument("--field", default="total")
     parser.add_argument(
         "--methods",
@@ -35,7 +35,7 @@ def main() -> int:
     parser.add_argument("--delta", type=float, default=0.1)
     parser.add_argument("--splits", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20261017)
-    parser.add_argument("--out", default="reports/tables/validity.csv")
+    parser.add_argument("--out", default="reports/tables/validity_total.csv")
     args = parser.parse_args()
 
     frame = pd.read_csv(args.table)
