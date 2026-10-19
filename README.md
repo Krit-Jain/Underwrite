@@ -181,18 +181,26 @@ the comparison **stronger**, not weaker:
 ### Is the certificate real?
 
 200 random resplits of the pooled calibration + test documents. Each split calibrates on half and
-measures the other half.
+measures the other half. "Certifies" is how often a threshold was found at all; the violation rate
+is the share of **certified** resplits whose realised risk then exceeded α — the rest issued no
+promise and so cannot break one.
 
-| α | method | certified | mean coverage | violations |
+| α | method | certifies | coverage | violates, given it certified |
 |---|---|---|---|---|
-| 0.10 | S3 black-box | 39.5% | 10.9% | 8.0% |
-| 0.10 | S5 probe + fusion | **100%** | **48.1%** | 11.5% |
-| 0.05 | S3 black-box | 2.0% | — | 2.0% |
-| 0.05 | S5 probe + fusion | **100%** | **29.4%** | 6.0% |
+| 0.10 | S3 black-box | 79/200 | 10.9% | 20.3% |
+| 0.10 | S4 probe | 200/200 | 18.0% | 4.5% |
+| 0.10 | S5 probe + fusion | **200/200** | **48.1%** | 11.5% |
+| 0.05 | S3 black-box | 4/200 | 17.5% | 100% |
+| 0.05 | S4 probe | 20/200 | 14.8% | 95.0% |
+| 0.05 | S5 probe + fusion | **200/200** | **29.4%** | 6.0% |
 
-S5 certifies in **every** resplit; S3 almost never does. The one number that is not clean: **at
-α=0.10 the violation rate is 11.5%, above δ=10%** — it is in the table rather than a footnote, and
-explained under [Limitations](#limitations).
+Coverage is averaged over certified splits only, so the sparse rows rest on very few resplits: S3
+at α=0.05 on 4 of them and S4 on 20.
+
+S5 certifies in **every** resplit. S3 rarely certifies, and when it does the promise usually breaks
+— all four of its α=0.05 certificates violate, as do a fifth of its α=0.10 ones. The one number that
+is not clean: **at α=0.10 S5's violation rate is 11.5%, above δ=10%** — it is in the table rather
+than a footnote, and explained under [Limitations](#limitations).
 
 ![Resplit validity](reports/figures/validity.png)
 
@@ -244,7 +252,30 @@ unnoticed inside a short window. A quiet, slow monitor is useful; a noisy one ge
 
 ![Audit lane](reports/figures/audit.png)
 
+The plot is one stream at a fixed seed, and it is not a flattering one. The lane stays silent
+through 616 clean documents (lower bound flat at 0.00), then the bound climbs to 0.08 after the
+template change — real evidence, but still short of α. The drift is caught at this audit rate only
+about half the time, and this is what the other half looks like.
+
 ---
+
+## The review UI
+
+Fields are colour-coded by decision — green auto-accepted, amber sent to review, red parse failure
+— and only the flagged ones are editable. The point is that you should not have to look at the
+values that cleared the gate.
+
+![Review UI](reports/figures/ui_overview.png)
+
+The batch certificate sits beside the documents, stating the budget, the certified threshold,
+what was auto-processed, how many fields were sampled for audit, and the exchangeability caveat in
+plain language:
+
+![Flagged field](reports/figures/ui_review_field.png)
+
+`scripts/capture_demo_media.py` starts the server, drives the page with Playwright, and writes both
+screenshots plus a short screen recording to `reports/demo_video/`. The served batch is frozen by
+`build_demo_batch.py` from the public CORD corpus, so the demo needs no GPU and no model download.
 
 ## Quickstart
 
@@ -311,6 +342,26 @@ underwrite/
 | `run_audit_detection.py` | false-alarm rate and detection delay over 500 seeds |
 | `build_demo_batch.py` | the frozen batch the review UI serves |
 | `make_figures.py` | every figure in `reports/figures/` |
+| `capture_demo_media.py` | UI screenshots and the screen recording in `reports/demo_video/` |
+
+Each script reproduces its committed output when run with **no arguments** — the defaults point at
+the canonical feature table and bundles. Two runs are variants rather than canonical, so they take
+flags. The OCR-free ablation:
+
+```bash
+python scripts/run_experiments.py --fields total --no-grounding \
+    --out reports/tables/ablation_no_grounding.csv
+```
+
+and the feature tables, rebuilt from the extraction traces:
+
+```bash
+python scripts/build_features.py --source cord \
+    --traces reports/traces/promptfix.jsonl --out data/features_table_v2.csv
+python scripts/build_features.py --source synthetic \
+    --traces reports/traces/extraction_v2_synthetic.jsonl \
+    --out data/features_table_v2_synthetic.csv
+```
 
 ## Development
 
