@@ -1,0 +1,6 @@
+split,field,cutoff,n_values,n_errors,n_confident_errors,share_of_errors
+test,total,-0.01,292,111,83,0.7477477477477478
+test,total,-0.05,292,111,102,0.918918918918919
+test,total,-0.1,292,111,111,1.0
+test,total,-0.5,292,111,111,1.0
+test,total,-1.0,292,111,111,1.0

@@ -10,22 +10,27 @@
 
 Every batch comes with a certificate:
 
-> *"These documents: per-field error rate **≤ 5%** with **90% confidence**. **49.7%** of totals
-> auto-processed, the rest routed to a human. Threshold set on 289 labelled documents. 12
-> auto-accepted fields sampled for audit."*
+> *"Error rate on documents like these: **≤ 10%** with **90% confidence**, measured across 200
+> resplits of the calibration and test pools. **48.1%** of totals auto-processed, the rest routed
+> to a human. Threshold set on 289 labelled documents. 12 auto-accepted fields sampled for
+> audit."*
 
 ---
 
 ## Why this exists
 
-A 2B vision-language model reads 972 invoice totals correctly **58.6%** of the time. The more
-interesting number is the other one: when it is wrong, **84% of those errors arrive with
-near-certain token probabilities**.
+A 2B vision-language model reads 972 CORD receipt totals correctly **58.6%** of the time. The
+more interesting number is the other one: on the held-out test split, **92% of the 111 wrong
+totals arrived with a mean token log-probability above −0.05** — an average per-token probability
+above 0.95. It was certain, and it was wrong.
 
-| what the model says | what it means |
+| | |
 |---|---|
-| `total = 9297.68`, token log-prob ≈ −0.0004 | it is completely sure |
-| the receipt's tax says 996.18, it returned 498.09 | it is also wrong |
+| the receipt's total | `8,800,000.00` |
+| what the model returned | `88000.0` |
+| its mean token log-probability | `−0.000002` |
+
+*Document `cord_train_0137`; the sweep behind "92%" is `reports/tables/confident_errors.csv`.*
 
 A bookkeeper cannot hand a client "about 96% accurate". They need to know **which values to
 double-check**. So the deliverable here is not a parser — it is a decision: *auto-accept this
@@ -139,14 +144,17 @@ CORD, 983 documents, `google/gemma-4-E2B-it` (revision pinned), 4-bit NF4, RTX 4
 
 ### The ablation
 
-Same certified error rate for every method. `total`, n = 292 held out, base error 38.0%.
+**Empirical coverage, not certified coverage.** `total`, n = 292 held out, base error 38.0%. The
+threshold behind each coverage column is selected on this same test set, so read the columns as an
+achievable frontier rather than a promise; the certified numbers are under
+[Is the certificate real?](#is-the-certificate-real).
 
 | method | signal | AUROC | coverage @2% | @5% | @10% |
 |---|---|---|---|---|---|
 | **S0** | mean token log-probability | 0.632 | 1.0% | 1.0% | 1.0% |
 | **S2** | validators only | 0.525 | 1.4% | 1.4% | 1.4% |
 | **S2g** | source grounding | 0.725 | 0.3% | 0.3% | 0.3% |
-| **S3** | logprob + validators + grounding + verbalized | 0.838 | 8.2% | 14.7% | 46.2% |
+| **S3** | logprob + validators + grounding | 0.838 | 8.2% | 14.7% | 46.2% |
 | **S4** | hidden-state probe only | 0.914 | 17.5% | 30.5% | 51.7% |
 | **S5** | **S3 + probe — the system** | **0.952** | **41.4%** | **49.7%** | **62.0%** |
 
@@ -200,6 +208,9 @@ Calibrate on Indonesian receipts, deploy on synthetic Indian GST invoices:
 The certificate does not break — it becomes **useless**. The scores shift even though the target
 corpus is *easier* (90.5% of totals correct), so a threshold calibrated on hard documents is never
 cleared. Recalibrating with labelled target documents repairs it:
+
+> This table was re-run after the grounding-convention fix and came out **identical**: the collapse
+> is a property of the score distribution, not an artifact of that bug.
 
 | α | k = 25 | k = 50 | k = 100 |
 |---|---|---|---|
