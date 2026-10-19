@@ -142,6 +142,18 @@ CORD, 983 documents, `google/gemma-4-E2B-it` (revision pinned), 4-bit NF4, RTX 4
 | parse failures | 2 / 983 (logged, not hidden) |
 | `total` accuracy | **58.6%** across 972 labelled documents |
 
+Seconds and token counts are measured from the traces by `run_cost_report.py`. Only the energy
+figure is an estimate, so its assumption sits in the table rather than in prose:
+
+| corpus | documents | seconds/document | output tokens/document | kWh, assuming 130 W total draw |
+|---|---|---|---|---|
+| CORD receipts | 983 | 9.06 | 46.8 | 0.32 |
+| synthetic Indian GST | 200 | 40.27 | 61.6 | 0.29 |
+
+The synthetic invoices are **4.4× slower** per document. A real Indian GST invoice is a taller,
+denser page than a CORD receipt and produces a longer answer; there is no way to get the shift set
+for receipt prices.
+
 ### The ablation
 
 **Empirical coverage, not certified coverage.** `total`, n = 292 held out, base error 38.0%. The
@@ -343,6 +355,7 @@ underwrite/
 | `build_demo_batch.py` | the frozen batch the review UI serves |
 | `make_figures.py` | every figure in `reports/figures/` |
 | `capture_demo_media.py` | UI screenshots and the screen recording in `reports/demo_video/` |
+| `run_cost_report.py` | seconds per document and the electricity estimate |
 
 Each script reproduces its committed output when run with **no arguments** — the defaults point at
 the canonical feature table and bundles. Two runs are variants rather than canonical, so they take
